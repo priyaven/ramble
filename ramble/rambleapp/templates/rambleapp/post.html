@@ -3,6 +3,8 @@
 {% load static %}
 {% if post %}
     {% include "./display_post.html" %}
+{% elif draft %}
+    {% include "./display_draft.html" %}
 {% else %}
     <p> 404 Post not found </p>
 {% endif %}
@@ -83,7 +85,8 @@ function submit_comment()
                 console.log(response, this.status, this.readyState)
 
                 if (this.readyState == 4) {
-                    window.location = "post/" + this.responseText
+                   //window.location = "post/" + this.responseText
+                    window.location = ""+ post_id.value //SRM 
                 }
             }
 

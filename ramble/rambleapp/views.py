@@ -1,17 +1,25 @@
 import json 
+import datetime
 from django.shortcuts import redirect
 
 # Create your views here.
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.template import loader
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout as auth_logout
+from django.contrib.auth import login as auth_login
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User as Auth_User
+from django.contrib.auth.forms import UserChangeForm
+from django.db import IntegrityError
+from django.shortcuts import render
 
 from social_django.models import UserSocialAuth
 
-from .models import Post, Like, Follow, Profile, InterestedUsers, Comment, Collection, CollectionPost
+from .models import Post, Like, Follow, Profile, InterestedUsers, Comment, Collection, CollectionPost, Blocked, Muted, HidePost
 from .forms import ProfileForm
+
+from actstream import action
 
 # Pages
 
@@ -20,7 +28,47 @@ def landing_page(request):
     context = {}
     return HttpResponse(template.render(context, request))
 
+def contact_us(request):
+    template = loader.get_template('rambleapp/contact_us.html')
+    context = {}
+    return HttpResponse(template.render(context, request))
 
+def signup_in(request):
+    if request.method=='GET':
+        template = loader.get_template('rambleapp/signup_in.html')
+        context = {}
+        return HttpResponse(template.render(context, request))
+    
+def post_signup(request):
+    if request.method=='POST': 
+        username = request.POST["username"]
+        email = request.POST["email"]
+        password = request.POST["psw"]
+        confirmation = request.POST["psw-repeat"]
+        if password != confirmation:
+            return render(request, "rambleapp/signup_in.html", {
+                "message": "Passwords must match."
+            })
+
+        try:
+            user = Auth_User.objects.create_user(username, email, password)
+            user.save()
+        except IntegrityError as e:
+            print(e)
+            return render(request, "rambleapp/signup_in.html", {
+                "message": "Email address already taken."
+            })
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            auth_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        #user = Auth_User.objects.get(username=username).pk
+        #form = ProfileForm(request.POST, request.FILES)
+        #template = loader.get_template('rambleapp/make_profile.html')
+        #context = {}
+        #return HttpResponse(template.render(context, request))
+        return redirect(make_profile)
+    return HttpResponseForbidden('allowed only via POST')
+    
 def post_email(request):
     if request.POST:
         email = request.POST['email']
@@ -32,6 +80,13 @@ def post_email(request):
         return HttpResponse(204)
     return HttpResponseForbidden("Allowed Only Via Post")
 
+def search(request):
+    query = request.POST.get('search_ramble')
+    object_list = Post.objects.filter(post_title__icontains=query) 
+    user_list =  Auth_User.objects.filter(username__icontains = query)
+    template = loader.get_template('rambleapp/search_results.html')
+    context = {'object_list': object_list, 'user_list' : user_list, 'query': query  }
+    return HttpResponse(template.render(context, request))
 
 @login_required
 def index(request):
@@ -44,29 +99,65 @@ def index(request):
     template = loader.get_template('rambleapp/index.html')
 
     # get all previous posts
-    posts = Post.objects.all().order_by('-post_timestamp')
-    posts_and_likes = [(post, len(Like.objects.filter(post_id=post))) for post in posts]
+    #posts = Post.objects.all().order_by('-post_timestamp')
+    posts = Post.objects.filter(status=1).order_by('-post_timestamp')
+    drafts = Post.objects.filter(status=0).order_by('-post_timestamp')
+
+    posts_and_likes = [(post, len(Like.objects.filter(post_id=post) )) for post in posts]
+    amplify_posts = [(post, Post.objects.filter(status=1).values('amplify_count')) for post in posts]
+    
+    drafts_and_likes = [(draft, len(Like.objects.filter(post_id=draft))) for draft in drafts]
+    hide_posts = [(HidePost.objects.filter(post_id=post, hide_status=1)) for post in posts]
 
     user_liked_posts = set([like.post_id.id for like in Like.objects.filter(user_id=user)])
     user_followers = set([follow.followee_id.id for follow in Follow.objects.filter(follower_id=user)])
     collection_posts = [post.post_id.pk for post in CollectionPost.objects.filter(collection_id__user_id=user)]
-
     context = {'posts': posts, 'user_liked_posts': user_liked_posts,
                'user_followers': user_followers, 'user_profile': user_profile,
-               'posts_and_likes': posts_and_likes, 'user_collected_posts': collection_posts}
+               'posts_and_likes': posts_and_likes, 'user_collected_posts': collection_posts, 'drafts': drafts, 'drafts_and_likes': drafts_and_likes, 'hide_posts':hide_posts, 'amplify_posts': amplify_posts}
     return HttpResponse(template.render(context, request))
 
 
 @login_required
 def make_profile(request):
+   # try:
+   #    profile = Profile.objects.get(user_id=request.user.id)  
+   #     if request.method== "POST":
+   #         form = ProfileForm(request.POST, request.FILES)
+   #         print("ABCS 1")
+   #         if form.is_valid():
+   #             form.save()
+   #             print("ABCS 2")
+   #             return redirect(index)
+   #     else:
+   #         print("ABCS 3")
+   #         form = EditProfileForm(request.POST, request.FILES)
+   #         context = { 'form' : form }
+   #         return render(request, "rambleapp/make_profile.html", context)
+   # except Profile.DoesNotExist:
+   #     print("ABCS 4")
+   #    form = ProfileForm(request.POST, request.FILES)
+   #    template = loader.get_template('rambleapp/make_profile.html')
+   #     context = {'form': form}
+   #     return HttpResponse(template.render(context, request))
+
     try:
         profile = Profile.objects.get(user_id=request.user.id)
-        return redirect(index)
     except Profile.DoesNotExist:
-        form = ProfileForm(request.POST, request.FILES)
-        template = loader.get_template('rambleapp/make_profile.html')
-        context = {'form': form}
-        return HttpResponse(template.render(context, request))
+        profile = Profile()
+        
+    if request.method == 'POST':
+        user = Auth_User.objects.get(pk=request.user.id)
+        form = ProfileForm(request.POST, request.FILES, instance=profile)
+        if form.is_valid():  
+            new_profile = form.save(commit=False)
+            new_profile.user_id = user
+            new_profile.save()
+            return redirect(index)
+    else:
+        form = ProfileForm(instance=profile)
+        context = { 'form' : form }
+        return render(request, "rambleapp/make_profile.html", context) 
 
 # user profile helper methods: 
 
@@ -101,12 +192,17 @@ def get_user_profile(request, user_id):
         profile_user = None
     if profile_user:
         user_posts = Post.objects.filter(user_id=profile_user).order_by('-post_timestamp')
+        hide_posts = [(post, HidePost.objects.filter(post_id=post, hide_status=1)) for post in user_posts]
         user_posts_and_likes = [(post, len(Like.objects.filter(post_id=post))) for post in user_posts]
         profile_user_profile = Profile.objects.get(user_id=request.user.id)
-
+        blocked = Blocked.objects.filter(blocked_users=profile_user, blocked_by_users= request.user.id)
+        muted = Muted.objects.filter(muted_users=profile_user, muted_by_users= request.user.id)
         profile_context = {'profile_user': profile_user, 'posts': user_posts,
                    'posts_and_likes': user_posts_and_likes,
                    'profile_user_profile': profile_user_profile,
+                    'blocked': blocked,
+                    'muted': muted,
+                    'hide_posts': hide_posts
                     }
     else:
         profile_context = {}
@@ -226,15 +322,17 @@ def get_user_profile_collections(request, user_id):
 
 def get_ramblepost(request, post_id):
     try:
-        post = Post.objects.get(pk=post_id)
-        post_likes = len(Like.objects.filter(post_id=post))
+        post = Post.objects.get(pk=post_id, status=1)
+        post_likes =len(Like.objects.filter(post_id=post))
         comments = Comment.objects.filter(post_id=post, depth=0)
         commenters = [comment.user_id for comment in comments]
         commenter_profiles = {profile.user_id : profile 
                         for profile in Profile.objects.all().filter(user_id__in=commenters)}
         comment_and_profile_list = [(comment, commenter_profiles[comment.user_id]) for comment in comments]
+        hide_post = HidePost.objects.filter(post_id=post, hide_status=1)
+        amplify_post = Post.objects.filter(pk=post_id, status=1).values('amplify_count')
         context = {'post': post, 'num_likes': post_likes, \
-            'comments_and_profiles': comment_and_profile_list }
+            'comments_and_profiles': comment_and_profile_list, 'hide_post': hide_post , 'amplify_post': amplify_post}
 
     except Post.DoesNotExist:
         post = None
@@ -247,7 +345,51 @@ def get_ramblepost(request, post_id):
     template = loader.get_template('rambleapp/post.html')
     return HttpResponse(template.render(total_context, request))
 
+def get_rambledraft(request, draft_id):
+    try:
+        draft = Post.objects.get(pk=draft_id, status=0)
+        #draft_likes = len(Like.objects.filter(post_id=draft))
+        #comments = Comment.objects.filter(post_id=draft, depth=0)
+        #ommenters = [comment.user_id for comment in comments]
+        #commenter_profiles = {profile.user_id : profile 
+        #               for profile in Profile.objects.all().filter(user_id__in=commenters)}
+        #comment_and_profile_list = [(comment, commenter_profiles[comment.user_id]) for comment in comments]
+        #context = {'draft': draft, 'num_likes': draft_likes, \
+        #   'comments_and_profiles': comment_and_profile_list }
 
+        context = {'draft': draft }
+
+    except Post.DoesNotExist:
+        draft = None
+        context = {}
+
+    loggedin_user_context = twitter_user_context(request)
+
+    total_context = {**context, **loggedin_user_context}
+
+    template = loader.get_template('rambleapp/post.html')
+    return HttpResponse(template.render(total_context, request))
+
+def amplify_post(request):
+    user = Auth_User.objects.get(pk=request.user.id)
+    post_id = request.POST.get('post_id', False)
+    amp_count = int(request.POST.get('amp_count'))
+
+    try:
+        post = Post.objects.get(pk=post_id, status=1)
+    except:
+        return HttpResponse(status=400)
+
+    if amp_count == -1:
+        post.amplify_count = post.amplify_count - 1
+    else: 
+        post.amplify_count += 1 
+    post.save() 
+    post.refresh_from_db()
+    action.send(request.user, verb='amplified/shared content', action_object=post, target= post.user_id)
+    
+    return HttpResponse(status=204)
+  
 def get_collection(request, collection_id):
     try:
         collection = Collection.objects.get(pk=collection_id)
@@ -306,6 +448,8 @@ def likes_get(request, post_id):
 
 def login(request):
     user = request.user
+    pswd = request.POST.get('pswd', False)
+
     try:
         twitter_login = user.social_auth.get(provider='twitter')
     except UserSocialAuth.DoesNotExist:
@@ -314,10 +458,13 @@ def login(request):
         twitter_login = None
     template = loader.get_template('rambleapp/login.html')
 
+    if twitter_login is None and pswd is not False: 
+        user = authenticate(request, username=user, password=pswd)
+
     posts = Post.objects.all().order_by('-post_timestamp')
     posts_and_likes = [(post, len(Like.objects.filter(post_id=post))) for post in posts]
-
-    context = {'twitter_login': twitter_login, 'posts': posts, 'posts_and_likes': posts_and_likes}
+   
+    context = {'twitter_login': twitter_login, 'posts': posts, 'posts_and_likes': posts_and_likes, 'user_details': user}
     return HttpResponse(template.render(context, request))
 
 
@@ -345,8 +492,10 @@ def post_ramble(request):
         post_tags = 'uncategorized, other random stuff'
     user = Auth_User.objects.get(pk=request.user.id)
 
-    new_post = Post(user_id=user, post_text=post_text, post_title=post_title)
+    new_post = Post(user_id=user, post_text=post_text, post_title=post_title, status=1)
     new_post.save()
+    hide_post = HidePost(post_id=new_post, hide_status=0)
+    hide_post.save()
     # This is a many to many model, so you need to save it first, 
     # so it has a primary key
     # then you add tags to it using the add method. 
@@ -360,23 +509,60 @@ def post_ramble(request):
     # return HttpResponse(status=204)
     return HttpResponse(pk)
 
+@login_required
+def save_draft(request): 
+    if request.method == 'POST':
+        new_ramble_title = request.POST.get('new_ramble_title')
+        new_ramble_post = request.POST.get('new_ramble_post')
+        new_ramble_tags = request.POST.get('new_ramble_tags')
+
+        #message = request.POST["success"]
+    
+        try:
+            now=datetime.datetime.now()
+            user = Auth_User.objects.get(pk=request.user.id)
+            draft = Post(user_id=user, post_text=new_ramble_post, post_title=new_ramble_title, post_timestamp= now, status=0)
+            #draft = Post.objects.create(post_title=new_ramble_title, post_text=new_ramble_post, tags=new_ramble_tags, post_timestamp= now)
+            draft.save()   
+            tagslist = [str(r).strip() for r in new_ramble_tags.split(',')]
+
+            draft.tags.add(*tagslist)
+            draft.save()
+
+            return HttpResponse(draft.pk)
+        except:
+            pass
+    #return HttpResponse(json.dumps('status': 1), content_type="application/json")
+    responseData = {
+        'status': 1
+    }
+    return JsonResponse(responseData)
 
 @login_required
-def post_profile(request):
-    if request.method == 'POST':
-        user = Auth_User.objects.get(pk=request.user.id)
-        form = ProfileForm(request.POST, request.FILES)
-        if form.is_valid():
-            new_profile = form.save(commit=False)
-            new_profile.user_id = user
-            # bio = form.cleaned_data['bio']
-            # fullname = form.cleaned_data['fullname']
-            # new_profile = Profile(user_id=user, profile_pic=pic, bio=bio, full_name=fullname)
-            new_profile.save()
-            return redirect('index')
-        else:
-            return HttpResponse("FUCK, form is invalid" + str(form.errors))
-    return HttpResponseForbidden('allowed only via POST')
+def load_draft(request):
+    try:
+        draft = Post.objects.filter(user_id=request.user.id, status=0)
+        print("Draft loading")
+        return HttpResponse(draft)
+    except Post.DoesNotExist:
+        return HttpResponse('')
+
+@login_required
+#def post_profile(request):
+#    if request.method == 'POST':
+#        user = Auth_User.objects.get(pk=request.user.id)
+#        form = ProfileForm(request.POST, request.FILES)
+#       if form.is_valid():
+#            new_profile = form.save(commit=False)
+#            new_profile.user_id = user
+#            # bio = form.cleaned_data['bio']
+#            # fullname = form.cleaned_data['fullname']
+#            # new_profile = Profile(user_id=user, profile_pic=pic, bio=bio, full_name=fullname)
+#            new_profile.save()
+#            return redirect('index')
+#        else:
+#            return HttpResponse("FUCK, form is invalid" + str(form.errors))
+#    return HttpResponseForbidden('allowed only via POST')
 
 
 @login_required
@@ -403,22 +589,57 @@ def post_comment(request):
         new_comment = Comment(user_id=user, post_id=post, comment_text=comment_text, 
                                 parent_id=parent_comment, depth=depth)
         new_comment.save()
+        action.send(request.user, verb='created comment', action_object=new_comment, target= post.user_id)
         return HttpResponse(status=204)
+      
     return HttpResponseForbidden('allowed only via POST')
 
 
 @login_required
 def delete_post(request):
     user = Auth_User.objects.get(pk=request.user.id)
-    post_id = request.POST['post_id']
-    post = Post.objects.get(pk=post_id)
+    post_id = request.POST.get('post_id', False)
+    draft_id = request.POST.get('draft_id', False)
+    if post_id is not False:
+        post = Post.objects.get(pk=post_id, status = 1 )
+    elif draft_id is not False:
+        post = Post.objects.get(pk=draft_id , status = 0 )
     if not post:
         return HttpResponse(status=400)
+
     if post.user_id == user:
         post.delete()
         return HttpResponse(status=204)
     else:
         return HttpResponse(status=400)
+
+@login_required
+def hide_post(request):
+    user = Auth_User.objects.get(pk=request.user.id)
+    post_id = request.POST.get('post_id', False)
+    if post_id is not False:
+        post = Post.objects.get(pk=post_id, status = 1 )
+    if not post:
+        return HttpResponse(status=400)
+    
+    try:
+        hide_post = HidePost.objects.get(post_id=post, hide_status=1)    
+    except: 
+        hide_post = HidePost(post_id=post, hide_status=1)
+        hide_post.save()
+        return HttpResponse(status=204)
+    
+    return HttpResponse(status=204)
+
+@login_required
+def convert_post(request):
+    user = Auth_User.objects.get(pk=request.user.id)
+    post_id = request.POST['post_id']
+    post = Post.objects.get(pk=post_id, status = 1 )
+    post.status = 0
+    post.save() 
+    
+    return HttpResponse(status=204)
 
 @login_required
 def delete_comment(request):
@@ -461,6 +682,7 @@ def like_post(request):
         new_like.save()
         return HttpResponse(status=204)
 
+    action.send(request.user, verb='liked the content of', action_object=post, target= post.user_id)
     # if present, delete row
     like.delete()
     return HttpResponse(status=204)
@@ -482,15 +704,66 @@ def follow_user(request):
     # check in followers table if the following relationship exists.
     try:
         followship = Follow.objects.get(follower_id=follower, followee_id=followee)
+        action.send(follower, verb='followed the user', action_object=followship, target= followee)
     except:
         # if it does, delete record.
         new_followship = Follow(follower_id=follower, followee_id=followee)
         new_followship.save()
+        action.send(follower, verb='followed the user', action_object=new_followship, target= followee)
         return HttpResponse(status=204)
     # If not, add relationship.
     followship.delete()
     return HttpResponse(204)
 
+@login_required
+def block_user(request):
+    blocked_by_id = request.user.id
+    block_id = request.POST['profile_user']
+
+    if  blocked_by_id == block_id:
+        return HttpResponse(status=400)
+
+    try:
+        blocked_by = Auth_User.objects.get(pk=blocked_by_id)
+        block_id = Auth_User.objects.get(pk=block_id)
+    except Auth_User.DoesNotExist:
+        return HttpResponse(status=400)
+    
+    try:
+        blockship = Blocked.objects.get(blocked_by_users=blocked_by, blocked_users=block_id)
+    except:       
+        #new_blockship = Blocked(blocked_users=block_id)
+        #Blocked.blocked_by_users.set(new_blockship)
+        blockship = Blocked.objects.create(blocked_users=block_id)
+        blockship.blocked_by_users.add(blocked_by)
+        return HttpResponse(status=204)
+    
+    blockship.delete()
+    return HttpResponse(204)
+
+@login_required
+def mute_user(request):
+    muted_by_id = request.user.id
+    mute_id = request.POST['profile_user']
+
+    if  muted_by_id == mute_id:
+        return HttpResponse(status=400)
+
+    try:
+        muted_by = Auth_User.objects.get(pk=muted_by_id)
+        mute_id = Auth_User.objects.get(pk=mute_id)
+    except Auth_User.DoesNotExist:
+        return HttpResponse(status=400)
+    
+    try:
+        muteship = Muted.objects.get(muted_by_users=muted_by, muted_users=mute_id)
+    except:       
+        muteship = Muted.objects.create(muted_users=mute_id)
+        muteship.muted_by_users.add(muted_by)
+        return HttpResponse(status=204)
+    
+    muteship.delete()
+    return HttpResponse(204)
 
 @login_required
 def create_collection(request):

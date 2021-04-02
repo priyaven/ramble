@@ -8,6 +8,7 @@ from taggit.managers import TaggableManager
 
 import ramble.settings as settings
 
+from actstream import registry
 
 # Create your models here.
 
@@ -22,14 +23,35 @@ class Profile(models.Model):
     profile_pic = models.ImageField(upload_to='profilepix/')
     bio = models.CharField(max_length=150)
 
+class Blocked(models.Model):
+    blocked_users = models.ForeignKey(Auth_User, related_name="blocked_users", on_delete=models.CASCADE)
+    blocked_by_users = models.ManyToManyField(Auth_User, related_name="blocked_by")
+
+class Muted(models.Model):
+    muted_users = models.ForeignKey(Auth_User, related_name="muted_users", on_delete=models.CASCADE)
+    muted_by_users = models.ManyToManyField(Auth_User, related_name="muted_by")
 
 class Post(models.Model):
+    class Status(models.IntegerChoices):
+        Draft = 0
+        Publish = 1
+
     user_id = models.ForeignKey(Auth_User, on_delete=models.CASCADE)
     post_timestamp = models.DateTimeField(default=datetime.now)
     post_title = models.CharField(max_length=100)
     post_text = models.CharField(max_length=10000)
     tags = TaggableManager()
+    #status = models.IntegerField(choices=STATUS, default=0)
+              
+    status = models.IntegerField(choices=Status.choices, default=0)
+    amplify_count = models.IntegerField(default=0)
 
+class HidePost(models.Model): 
+    class HideStatus(models.IntegerChoices):
+        Hide = 0
+        Unhide = 1
+    post_id = models.ForeignKey(Post, on_delete=models.CASCADE)
+    hide_status = models.IntegerField(choices = HideStatus.choices , default = 0 )
 
 class Collection(models.Model):
     user_id = models.ForeignKey(Auth_User, on_delete=models.CASCADE)
@@ -68,5 +90,6 @@ class Follow(models.Model):
         unique_together = (('follower_id', 'followee_id'),)
     follower_id = models.ForeignKey(Auth_User, on_delete=models.CASCADE, related_name="followee_id")
     followee_id = models.ForeignKey(Auth_User, on_delete=models.CASCADE, related_name="follower_id")
+
 
 

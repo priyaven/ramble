@@ -1,10 +1,19 @@
+<!DOCTYPE html> <!-- SRM -->
 {% load static %}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  <!-- SRM -->
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <link rel="shortcut icon" type="image/png" href="{% static 'images/fleuron_transparent_icon.ico' %}"/>
     <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> <!-- SRM -->
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <title>Ramble - Write, Read, Curate</title>
 
 
@@ -33,6 +42,68 @@
                 setTimeout(function(){
                     deleted_post_div.style.height=0;
                 }, 1000)
+            }
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function delete_draft(draft_id)
+    {
+        if (!confirm("Are you sure you want to delete this draft?")){
+            return;
+        }
+
+        var deleted_draft_div = document.getElementById("draft_"+draft_id);
+        deleted_draft_div.style.opacity=0.5;
+        deleted_draft_div.style.height=deleted_draft_div.clientHeight+'px';
+        data = {
+            draft_id: draft_id,
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'delete_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+
+            if (this.readyState == 4) {
+                deleted_draft_div.style.opacity=0;
+                setTimeout(function(){
+                    deleted_draft_div.style.height=0;
+                }, 1000)
+            }
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function convert_post(post_id)
+    {
+     
+        var convert_post_div = document.getElementById("post_"+post_id);
+        
+        data = {
+            post_id: post_id,
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'convert_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+
+            if (this.readyState == 4) {
+                console.log("Converted post to draft")
+                setInterval('location.reload()', 5000);
             }
         }
 
@@ -75,7 +146,78 @@
         ajax.send(formData)
 
     }
+    function hide_post(post_id)
+    {
+        var hide_div = document.getElementById("hide_"+post_id);
+        if (document.getElementById("hide_"+post_id).src.endsWith("{% static 'images/unhide.png' %}"))
+        {
+            console.log("unhiding...");
+            document.getElementById("hide_"+post_id).src = "{% static 'images/hide.png' %}";
+        }
+        else
+        {
+            document.getElementById("hide_"+post_id).src = "{% static 'images/unhide.png' %}";    
+        }
 
+        data = {
+            post_id: post_id,
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'hide_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+            //setInterval('location.reload()', 3000);            
+            document.getElementById("post_"+post_id).style.display = "none";
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+
+    function amplify_post(post_id)
+    {
+        var amplify_div = document.getElementById("amplify_"+post_id);
+        var amp_count = 0 ;
+        if (document.getElementById("amplify_"+post_id).src.endsWith("{% static 'images/amplified_button.png' %}"))
+        {
+            console.log("unamplifying...");
+            document.getElementById("amplify_"+post_id).src = "{% static 'images/amplify_button.png' %}";
+            amp_count = -1; 
+        }
+        else
+        {   
+            document.getElementById("amplify_"+post_id).src = "{% static 'images/amplified_button.png' %}";    
+            amp_count = 1;
+        }
+        console.log("amp_count");
+        console.log(amp_count);
+        data = {
+            post_id: post_id,
+            amp_count : amp_count           
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'amplify_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState) 
+            //setInterval('location.reload()', 2000);
+            $('#amplify_div').load(document.URL +  ' #amplify_div');
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
 
     function follow_user(user_id)
     {
@@ -124,6 +266,9 @@
         console.log(event)
         if (event.keyCode == 13) {
             var collection_name = document.getElementById("new_collection");
+             if (collection_name.value == '' ) { 
+                 collection_name.value = "Uncategorised"
+             }
              data = {
                 collection_name: collection_name.value,
                 collection_desc: '',
@@ -143,6 +288,24 @@
                     new_button.innerHTML = '<img src="' + imgsrc + '" width="20px"/>' + json.name 
                     colls = document.getElementById('all_collections')
                     colls.insertBefore(new_button, colls.firstChild)
+                    //SRM
+                    $(document).ready(function () {
+                        console.log("KEY PRESS COLLECTION CLICK 1") 
+                        coll_id = "collection_"+json.id            
+                    $('#coll_id').on('click', function () {
+                        console.log("KEY PRESS COLLECTION CLICK")
+                        if (document.getElementById('"collection_post_"+json.id').src.endsWith("{% static 'images/collected.png' %}"))
+                        {
+                            console.log("un-collecting...");
+                            document.getElementById('"collection_post_"+json.id').src = "{% static 'images/collect.png' %}";
+                        }
+                        else
+                        {   
+                            document.getElementById('"collection_post_"+json.id').src = "{% static 'images/collected.png' %}";
+                        }
+                        });
+                    });
+                    //SRM
                 }
             }
             var formData = new FormData()
@@ -151,6 +314,71 @@
             ajax.send(formData)
         }
     }
+
+    function block_user(profile_user, button_block_user_id) { 
+        var block_img = document.getElementById("block_"+profile_user);
+
+        if (document.getElementById("block_"+profile_user).src.endsWith("{% static 'images/blocked_button.png' %}"))
+        {
+            console.log("unblocking..");
+            document.getElementById("block_"+profile_user).src = "{% static 'images/block_button.png' %}";
+        }
+        else
+        {
+            document.getElementById("block_"+profile_user).src = "{% static 'images/blocked_button.png' %}";
+        }
+
+        data = {
+            profile_user : profile_user
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'block_user' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+            
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function mute_user(profile_user, button_mute_user_id) { 
+        var mute_img = document.getElementById("mute_"+profile_user);
+
+        if (document.getElementById("mute_"+profile_user).src.endsWith("{% static 'images/muted_user.png' %}"))
+        {
+            console.log("unmuting..");
+            document.getElementById("mute_"+profile_user).src = "{% static 'images/mute_user.png' %}";
+        }
+        else
+        {
+            document.getElementById("mute_"+profile_user).src = "{% static 'images/muted_user.png' %}";
+        }
+
+        data = {
+            profile_user : profile_user
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'mute_user' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+            
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    } 
 
     function collect_post(post_id)
     {
@@ -176,6 +404,23 @@
         ajax.onreadystatechange = function(response)
         {
             console.log(response, this.status, this.readyState)
+            //SRM
+            $(document).ready(function() {
+            console.log("POST COLLECTION CLICK ")
+            coll_id =  'collection_'+collection_id
+            $(document).on("click", "#coll_id", function () {
+                if (document.getElementById("collection_post_"+collection_id).src.endsWith("{% static 'images/collected.png' %}"))
+                {
+                    console.log("un-collecting...");
+                    document.getElementById("collection_post_"+collection_id).src = "{% static 'images/collect.png' %}";
+                }
+                else
+                {   
+                    document.getElementById("collection_post_"+collection_id).src = "{% static 'images/collected.png' %}";
+                }
+            });
+        });
+            //SRM
         }
 
         var formData = new FormData()
@@ -205,26 +450,65 @@
 
 
     </script>
-</head>
+    </head>
 <body style="margin:0">
+
 <div class="header">
-    <table>
+    <div> 
+        <a href="{% url 'index' %}">
+            <img class="headerimg" src="{% static 'images/fleuron_header_reverse_transparent.png' %}" width=300px"
+                 style="margin-right:5px;margin-top:5px;background-color:#fcfcfc"/>
+    </a>
+    <div style="float: right ;padding-right: 20px; margin-top: 20px;">
+        <a href="{% url 'contact_us' %}" style="color: black;"><i class="fa fa-envelope" style="color: black;"></i> Contact</a> 
+    </div>       
+      
+</div>
+   
+    <div style="float: right;">
+        {% if user.username %}
+        <div style="text-align:right; font-size:small">
+            <form method="POST" action="{% url 'search_results' %}">
+                {% csrf_token %}
+                <input class="search" type="text" name="search_ramble" placeholder="Search Ramble">
+            </form>
+            <p>
+        {% if user_profile.full_name %}
+                    Hello <a href="../u/{{ user.id }}"> {{ user_profile.full_name }}! </a>
+                {% else %}
+                    Hello <a href="../u/{{ user.id }}"> {{ user.username }}! </a> 
+                {% endif %}
+                &nbsp; &nbsp;
+                <img src="{{ user_profile.profile_pic.url }}" width="20px"/>
+                <a href="{% url 'logout' %}"><button style="font-size:small">Logout</button></a>
+             </p>
+        
+        </div>
+    {% else %}
+
+  
+       <a href="{% url 'signup_in' %}"><button id="signupbtn" >Sign Up/In</button></a>
+    {% endif    %}
+    
+         
+    </div>
+    <!-- <table>
         <tr>
             <td>
                 <a href="{% url 'index' %}">
-                        <img src="{% static 'images/fleuron_header_reverse_transparent.png' %}" width=300px"
+                        <img class="headerimg" src="{% static 'images/fleuron_header_reverse_transparent.png' %}" width=300px"
                              style="margin-right:5px;margin-top:5px;background-color:#fcfcfc"/>
-                        <!--<img src="{% static 'images/logo_transparent.png' %}" width="44" height="44"
-                             style="margin-right:5px;margin-top:5px;"/>
-                        <div style="font-size:55;font-weight:bold;display:inline-block;"> Ramble </div> -->
                 </a>
-                <!--<p style="margin-left:60px"> Read, Write, Curate</p>-->
             </td>
             <td style="text-align:right">
                 {% if user.username %}
                     <div style="text-align:right; font-size:small">
                         <p>
-                            Hello <a href="../u/{{ user.id }}"> {{ user_profile.full_name }}! </a>
+			 {% if user_profile.full_name %}
+                                Hello <a href="../u/{{ user.id }}"> {{ user_profile.full_name }}! </a>
+                            {% else %}
+                                Hello <a href="../u/{{ user.id }}"> {{ user.username }}! </a> 
+                            {% endif %}
                             &nbsp; &nbsp;
                             <img src="{{ user_profile.profile_pic.url }}" width="20px"/>
                             <a href="{% url 'logout' %}"><button style="font-size:small">Logout</button></a>
@@ -240,23 +524,24 @@
                 {% endif %}
             </td>
         </tr>
-    </table>
+    </table> -->
 </div>
-<div style="margin:50px">
+<div class="container, m-5" >
 {% block content %}
 {% endblock %}
 </div>
-<div id=modalLikes onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
+<div class="container" id=modalLikes onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
 background:rgba(100,100,100,0.5);">
     <div id=modalLikesInner style="position:fixed;top:30vh;height:40vh;left:30vw;width:40vw;
 background:white;box-shadow:1px 1px 10px #888; border-radius:8px;overflow-y:scroll">
     </div>
 </div>
-<div id=modalCollect onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
+<div class="container" id=modalCollect onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
 background:rgba(100,100,100,0.5);">
     <div id=modalCollectInner style="position:fixed;top:30vh;height:40vh;left:30vw;width:40vw;
 background:white;box-shadow:1px 1px 10px #888; border-radius:8px;overflow-y:scroll">
     </div>
+</div>
 </div>
 </body>
 </html>

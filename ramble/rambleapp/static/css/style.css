@@ -10,6 +10,12 @@ header, .header {
 	font: 20px Arial, sans-serif;
 	box-shadow: 0 0 9px #ffffff;
 }
+  
+@media screen and (max-width: 300px) {
+	.headerimg{
+			width : 150px;
+	}
+} 
 
 header a, .header a {
 	color: #ff5131;

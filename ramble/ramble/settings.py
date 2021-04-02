@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/2.1/ref/settings/
 """
 
 import os
+from .config import * #SRM
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,15 +36,22 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '111.222.333.444', 'www.ramble.today'
 
 INSTALLED_APPS = [
     'social_django',
+    'django.contrib.auth',
     'taggit',
     'rambleapp.apps.RambleappConfig',
     'django.contrib.admin',
-    'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
+    'crispy_forms',
+    'postman',
+    'actstream',
 ]
+SITE_ID = 1
+POSTMAN_AUTO_MODERATE_AS = True 
+POSTMAN_QUICKREPLY_QUOTE_BODY = True
 
 MIDDLEWARE = [
     'social_django.middleware.SocialAuthExceptionMiddleware',
@@ -58,7 +66,10 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'ramble.urls'
 
-SECURE_SSL_REDIRECT = True
+#SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_SSL_REDIRECT = False
 
 TEMPLATES = [
     {
@@ -77,6 +88,7 @@ TEMPLATES = [
         },
     },
 ]
+CRISPY_TEMPLATE_PACK = 'bootstrap4'
 
 WSGI_APPLICATION = 'ramble.wsgi.application'
 
@@ -114,12 +126,12 @@ AUTHENTICATION_BACKENDS = (
     'social_core.backends.github.GithubOAuth2',
     'social_core.backends.twitter.TwitterOAuth',
     'social_core.backends.facebook.FacebookOAuth2',
-
+    'social_core.backends.open_id.OpenIdAuth',
+    'social_core.backends.google.GoogleOAuth2',
+    'social_core.backends.google.GoogleOAuth',
+   
     'django.contrib.auth.backends.ModelBackend',
 )
-
-SOCIAL_AUTH_TWITTER_KEY = '07ezQH4rAy9jtQsFNpITLlZUD'
-SOCIAL_AUTH_TWITTER_SECRET = 'AyzkT2Osys7znbFVfNnarpUVvLDH2DAwNgYJu0xVOi7WLxK5hi'
 
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'index'
@@ -145,3 +157,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/2.1/howto/static-files/
 
 STATIC_URL = '/static/'
+
+ACTSTREAM_SETTINGS = {
+    'MANAGER': 'rambleapp.managers.MyActionManager',
+    'FETCH_RELATIONS': True,
+    'USE_PREFETCH': True,
+    'USE_JSONFIELD': True,
+    'GFK_FETCH_DEPTH': 1,
+}
