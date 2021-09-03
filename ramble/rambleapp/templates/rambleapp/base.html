@@ -1,12 +1,252 @@
+<!DOCTYPE html> <!-- SRM -->
 {% load static %}
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">  <!-- SRM -->
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <link rel="shortcut icon" type="image/png" href="{% static 'images/fleuron_transparent_icon.ico' %}"/>
     <script src="https://code.jquery.com/jquery-3.1.0.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> <!-- SRM -->
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js" integrity="sha512-ooSWpxJsiXe6t4+PPjCgYmVfr1NS5QXJACcR/FPpsdm6kqG1FmQ2SVyg2RXeVuCRBLr0lWHnWJP6Zs1Efvxzww==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" integrity="sha512-0SPWAwpC/17yYyZ/4HSllgaK7/gg9OlVozq8K7rf3J8LvCjYEEIfzzpnA2/SSjpGIunCSD18r3UhvDcu/xncWA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <title>Ramble - Write, Read, Curate</title>
 
+    <script
+    src="https://cdn.tiny.cloud/1/no-api-key/tinymce/5/tinymce.min.js"
+    referrerpolicy="origin">
+</script>
+<script>
+    $( function() {
+      var availableTags = [
+        "Fiction",
+        "Action and Adventure",
+        "Crime and Mystery",
+        "Non-Fiction",
+        "Fantasy",
+        "Horror",
+        "Romance",
+        "Science Fiction",
+        "Biography",
+        "Self-help",
+        "Travel"
+      ];
+      $( "#new_ramble_tags" ).autocomplete({
+        source: availableTags
+      });
+    } );
+    </script>
+<script>
+    function getStats(id) 
+    {
+        var body = tinymce.get(id).getBody(), text = tinymce.trim(body.innerText || body.textContent);
+
+        return text.length
+    }
+
+    tinymce.PluginManager.add('charactercount', function (editor) 
+    {
+        var self = this;
+
+        function update() 
+        {
+            editor.theme.panel.find('#charactercount').text(['Characters: {0}', self.getCount()]);
+        }
+        editor.on('init', function () 
+        {
+            var statusbar = editor.theme.panel && editor.theme.panel.find('#statusbar')[0];
+            if (statusbar) 
+            {
+                window.setTimeout(function () 
+                {
+                    statusbar.insert({
+                        type: 'label',
+                        name: 'charactercount',
+                        text: ['Characters: {0}', self.getCount()],
+                        classes : 'charactercount',
+                        disabled: editor.settings.readonly
+                    }, 0);
+
+                    editor.on('setcontent beforeaddundo', update);
+
+                    editor.on('keyup', function (e) 
+                    {
+                        update();
+                    });
+                }, 0);
+            }
+        });
+
+        self.getCount = function () 
+        {
+            var tx = editor.getContent({ format: 'raw' });
+            var decoded = decodeHtml(tx);
+            var decodedStripped = decoded.replace(/(<([^>]+)>)/ig, "").trim();
+            var tc = decodedStripped.length;
+            return tc;
+        };
+
+        function decodeHtml(html) 
+        {
+            var txt = document.createElement("textarea");
+            txt.innerHTML = html;
+            return txt.value;
+        }
+    });
+
+    function submit_ramble()
+    {
+        num_chars = getStats('new_ramble_post')
+        if ( num_chars > 10000) {
+            alert("You have exceeded the 10,000 character limit with " + num_chars + " characters")
+            return false
+        } 
+        if (num_chars < 1000) {
+            alert("Only " + num_chars + " characters? Go on, type more. At least a 1000.")
+            return false
+        }
+
+        data = {
+            new_ramble_title: new_ramble_title.value,
+            new_ramble_post: tinyMCE.activeEditor.getContent(),
+            new_ramble_tags: new_ramble_tags.value
+        }
+
+            var ajax = new XMLHttpRequest()
+            ajax.open("POST", "ramblepost")
+            ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+            ajax.onreadystatechange = function(response)
+            {
+                console.log(response, this.status, this.readyState)
+
+                if (this.readyState == 4) {
+                    window.location = "post/" + this.responseText
+                }
+            }
+
+            var formData = new FormData()
+            for(var i in data)
+                formData.append(i, data[i]);
+
+            ajax.send(formData)
+
+    }
+     $(document).ready(function() { 
+     $("#draft").on("click", function() { 
+        console.log("In save draft script");
+        if ( tinyMCE.activeEditor !== null ) { 
+          data = {
+              new_ramble_title: new_ramble_title.value,
+              new_ramble_post: tinyMCE.activeEditor.getContent(),
+              new_ramble_tags: new_ramble_tags.value
+          }
+        }
+       
+        $.ajax({
+            url:'save_draft',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            data: data,
+            type: 'POST',
+            success: function() {
+                console.log('Saved the draft.')
+                if ( tinyMCE.activeEditor !== null) { 
+                  tinyMCE.activeEditor.setContent("");
+                }
+                $("body").load(location.href+"#body");
+            }
+        });
+    });
+     })
+</script>
+
+
+<script>
+    /* tinymce.init({
+        selector: '#new_ramble_post',
+        plugins: "link charactercount",
+        statusbar: true,
+        init_instance_callback: function (editor) 
+        {
+            $('.mce-tinymce').show('fast');
+            $(editor.getContainer()).find(".mce-path").css("display", "none");
+        }
+    }); */
+
+    if ((screen.width && screen.height) > 600) {  
+        
+    tinymce.init({
+        selector: '#new_ramble_post',
+        //plugins: "link charactercount", //SRM
+        statusbar: true,
+        menubar: true,
+        max_height: 150,
+        max_width: 50,
+        plugins: [
+      'advlist autolink autosave link image lists charmap print preview hr anchor pagebreak',
+      'searchreplace visualblocks visualchars code fullscreen insertdatetime media nonbreaking',
+      'table emoticons template paste help wordcount'
+    ],
+    toolbar: 'undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | ' +
+      'bullist numlist outdent indent | link image | print preview media fullpage | ' +
+      'forecolor backcolor emoticons | help ',
+    toolbar_mode: 'floating',
+    menu: {
+      favs: {title: 'My Favorites', items: 'code visualaid | searchreplace | emoticons'}
+    },
+    menubar: 'favs file edit view insert format tools table help', 
+    setup: function(editor) {
+    editor.on('init', function(e) {
+           console.log('The Editor has been initialized.');
+        });
+    },
+
+    init_instance_callback: function (editor) {
+        $(editor.getContainer()).find('button.tox-statusbar__wordcount').click();  // if you use jQuery
+        }}); 
+    }
+    else { 
+        tinymce.init({
+        selector: '#new_ramble_post',
+        
+        mobile: {
+            statusbar: true,
+            menubar: true,
+            plugins: [
+      'advlist autolink link image lists charmap print preview hr anchor pagebreak',
+      'searchreplace visualblocks visualchars code fullscreen insertdatetime media nonbreaking',
+      'table emoticons template paste help wordcount'],
+    
+            toolbar: 'undo redo | styleselect | bold italic | alignleft aligncenter alignright alignjustify | ' +
+      'bullist numlist outdent indent | link image | print preview media fullpage | ' +
+      'forecolor backcolor emoticons | help ',
+    menu: {
+      favs: {title: 'My Favorites', items: 'code visualaid | searchreplace | emoticons'}
+    },
+    menubar: 'favs file edit view insert format tools table help',
+         
+    setup: function(editor) {
+    editor.on('init', function(e) {
+           console.log('The Editor has been initialized.');
+        });
+    },
+
+    init_instance_callback: function (editor) {
+        $(editor.getContainer()).find('button.tox-statusbar__wordcount').click();  // if you use jQuery
+        }
+        }}); 
+    
+    }
+
+</script>
 
     <script>
     function delete_post(post_id)
@@ -33,6 +273,73 @@
                 setTimeout(function(){
                     deleted_post_div.style.height=0;
                 }, 1000)
+                //$("html").html(this.responseText);
+                document.open();
+                document.write(this.responseText);
+                document.close();
+                window.history.pushState("index", "title", "/index")
+            }
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function delete_draft(draft_id)
+    {
+        if (!confirm("Are you sure you want to delete this draft?")){
+            return;
+        }
+
+        var deleted_draft_div = document.getElementById("draft_"+draft_id);
+        deleted_draft_div.style.opacity=0.5;
+        deleted_draft_div.style.height=deleted_draft_div.clientHeight+'px';
+        data = {
+            draft_id: draft_id,
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'delete_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+
+            if (this.readyState == 4) {
+                deleted_draft_div.style.opacity=0;
+                setTimeout(function(){
+                    deleted_draft_div.style.height=0;
+                }, 1000)
+            }
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function convert_post(post_id)
+    {
+     
+        var convert_post_div = document.getElementById("post_"+post_id);
+        
+        data = {
+            post_id: post_id,
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'convert_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+
+            if (this.readyState == 4) {
+                console.log("Converted post to draft")
+                setInterval('location.reload()', 5000);
             }
         }
 
@@ -65,7 +372,57 @@
         ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
         ajax.onreadystatechange = function(response)
         {
+            console.log(response, this.status, this.readyState);
+            $('#like_count').load(document.URL +  ' #like_count');
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function edit_post(post_id) {
+        tinymce.init({
+            selector: "#new_ramble_post",
+            setup: function (editor) {
+                editor.on('init', function (e) {
+                    ajax_get("{% url 'get_post' 123456 %}".replace('123456', post_id), true, function (responseText) {
+                        var jsonstr = JSON.parse(responseText)
+                        editor.setContent(jsonstr.text);
+                        document.getElementById("new_ramble_title").value=jsonstr.title
+                    })
+                });
+
+            }
+        });
+    }
+    
+    function hide_post(post_id)
+    {
+        var hide_div = document.getElementById("hide_"+post_id);
+        if (document.getElementById("hide_"+post_id).src.endsWith("{% static 'images/unhide.png' %}"))
+        {
+            console.log("unhiding...");
+            document.getElementById("hide_"+post_id).src = "{% static 'images/hide.png' %}";
+        }
+        else
+        {
+            document.getElementById("hide_"+post_id).src = "{% static 'images/unhide.png' %}";    
+        }
+
+        data = {
+            post_id: post_id,
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'hide_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
             console.log(response, this.status, this.readyState)
+            //setInterval('location.reload()', 3000);            
+            document.getElementById("post_"+post_id).style.display = "none";
         }
 
         var formData = new FormData()
@@ -76,29 +433,76 @@
 
     }
 
+    function amplify_post(post_id)
+    {
+        var amplify_div = document.getElementById("amplify_"+post_id);
+        var amp_count = 0 ;
+        if (document.getElementById("amplify_"+post_id).src.endsWith("{% static 'images/amplified_button.png' %}"))
+        {
+            console.log("unamplifying...");
+            document.getElementById("amplify_"+post_id).src = "{% static 'images/amplify_button.png' %}";
+            amp_count = -1; 
+        }
+        else
+        {   
+            document.getElementById("amplify_"+post_id).src = "{% static 'images/amplified_button.png' %}";    
+            amp_count = 1;
+        }
+        console.log("amp_count");
+        console.log(amp_count);
+        data = {
+            post_id: post_id,
+            amp_count : amp_count           
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'amplify_a_ramble' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState) 
+            //setInterval('location.reload()', 2000);
+            $('#amplify_div').load(document.URL +  ' #amplify_div');
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
 
     function follow_user(user_id)
     {
-        if (document.getElementById("useradd_"+user_id).src.endsWith("{% static 'images/follows.png' %}"))
-        {
-            console.log("unfollowing...");
-            document.getElementById("useradd_"+user_id).src = "{% static 'images/follow.png' %}";
-        }
-        else
-        {
-            console.log("following...");
-            document.getElementById("useradd_"+user_id).src = "{% static 'images/follows.png' %}";
-        }
+        var getId = document.getElementById("useradd_" + user_id);
+        var imagePath = $('.imagePath');
 
+        if (document.getElementById("useradd_" + user_id).src.endsWith("{% static 'images/follows.png' %}")) {
+            console.log("unfollowing...");
+            imagePath.attr('src', imagePath.attr('src').replace("{% static 'images/follows.png' %}", "{% static 'images/follow.png' %}"));
+        }
+        else {
+            console.log("following...");
+            imagePath.attr('src', imagePath.attr('src').replace("{% static 'images/follow.png' %}", "{% static 'images/follows.png' %}"));
+        }
         data = {
             user_id: user_id,
         }
         var ajax = new XMLHttpRequest()
         ajax.open("POST", "{% url 'follow_a_user' %}")
         ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
-        ajax.onreadystatechange = function(response)
-        {
-            console.log(response, this.status, this.readyState)
+        ajax.onreadystatechange = function (response) {
+            console.log(response, this.status, this.readyState);
+            if (this.status != 204 || this.status !=200) {
+                if (document.getElementById("useradd_" + user_id).src.endsWith("{% static 'images/follow.png' %}")) {
+                    console.log("unfollowing...");
+                    imagePath.attr('src', imagePath.attr('src').replace("{% static 'images/follow.png' %}", "{% static 'images/follows.png' %}"));
+                }
+                else {
+                    console.log("following...");
+                    imagePath.attr('src', imagePath.attr('src').replace("{% static 'images/follows.png' %}", "{% static 'images/follow.png' %}"));
+                }
+            }
         }
 
         var formData = new FormData()
@@ -124,6 +528,9 @@
         console.log(event)
         if (event.keyCode == 13) {
             var collection_name = document.getElementById("new_collection");
+             if (collection_name.value == '' ) { 
+                 collection_name.value = "Uncategorised"
+             }
              data = {
                 collection_name: collection_name.value,
                 collection_desc: '',
@@ -131,26 +538,112 @@
             var ajax = new XMLHttpRequest()
             ajax.open("POST", "{% url 'create_collection' %}")
             ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
-            ajax.onreadystatechange = function(response)
-            {
+            ajax.onreadystatechange = function(response) {
                 console.log(response, this.status, this.readyState)
-
                 if (this.readyState == 4) {
                     var json = JSON.parse(this.responseText);
                     new_button = document.createElement('button')
                     new_button.setAttribute('id', 'collection_' + json.id)
                     imgsrc = "{% static 'images/collect.png' %}"
-                    new_button.innerHTML = '<img src="' + imgsrc + '" width="20px"/>' + json.name 
+                    imgsrcCollected = "{% static 'images/collected.png' %}"
+                    new_button.innerHTML = '<img src="' + imgsrc + '" width="20px"/>' + json.name
                     colls = document.getElementById('all_collections')
                     colls.insertBefore(new_button, colls.firstChild)
+                    collId = $('#modalCollectInner').children("#all_collections").children('#' + "collection_" + json.id).attr("id");
+                    coll = $('#modalCollectInner').children("#all_collections").children('#' + "collection_" + json.id).children();
+                    collSrc = $('#modalCollectInner').children("#all_collections").children('#' + "collection_" + json.id).children().attr("src");
+                    console.log(collId);
+                    console.log(collSrc);
+                    $('#' + collId).on("click", function () {
+                        console.log("key press colleciton click" + coll.src);
+                        if (coll.attr("src").endsWith(imgsrcCollected)) {
+                            console.log("un-collecting");
+                            $('#modalCollectInner').children("#all_collections").children('#' + "collection_" + json.id).children().attr("src", imgsrc);
+                            console.log($(coll).attr("src"));
+                        } else {
+                            console.log("collecting");
+                            $('#modalCollectInner').children("#all_collections").children('#' + "collection_" + json.id).children().attr("src", imgsrcCollected);
+                            console.log($(coll).attr("src"));
+                        }
+                        $.ajax({
+                            complete: function () {
+                                
+                            }
+                        });
+                    });
                 }
             }
             var formData = new FormData()
-            for(var i in data)
+            for (var i in data)
                 formData.append(i, data[i]);
             ajax.send(formData)
         }
     }
+
+    function block_user(profile_user, button_block_user_id) { 
+        var block_img = document.getElementById("block_"+profile_user);
+
+        if (document.getElementById("block_"+profile_user).src.endsWith("{% static 'images/blocked_button.png' %}"))
+        {
+            console.log("unblocking..");
+            document.getElementById("block_"+profile_user).src = "{% static 'images/block_button.png' %}";
+        }
+        else
+        {
+            document.getElementById("block_"+profile_user).src = "{% static 'images/blocked_button.png' %}";
+        }
+
+        data = {
+            profile_user : profile_user
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'block_user' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+            
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    }
+    function mute_user(profile_user, button_mute_user_id) { 
+        var mute_img = document.getElementById("mute_"+profile_user);
+
+        if (document.getElementById("mute_"+profile_user).src.endsWith("{% static 'images/muted_user.png' %}"))
+        {
+            console.log("unmuting..");
+            document.getElementById("mute_"+profile_user).src = "{% static 'images/mute_user.png' %}";
+        }
+        else
+        {
+            document.getElementById("mute_"+profile_user).src = "{% static 'images/muted_user.png' %}";
+        }
+
+        data = {
+            profile_user : profile_user
+        }
+        var ajax = new XMLHttpRequest()
+        ajax.open("POST", "{% url 'mute_user' %}")
+        ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+        ajax.onreadystatechange = function(response)
+        {
+            console.log(response, this.status, this.readyState)
+            
+        }
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+
+    } 
 
     function collect_post(post_id)
     {
@@ -164,18 +657,101 @@
 
     function post_to_collection(collection_id, post_id)
     {
-        user_comments = prompt("Any nice thing to say about this piece?")
+        user_comments = prompt("Any nice thing to say about this piece?");
+        if (user_comments == null ) { 
+            return false;
+        }
         data = {
             collection_id: collection_id, 
             post_id: post_id, 
             user_comments: user_comments,
         }
+        collId = $('#modalCollectInner').children("#all_collections").children('#'+ "each_collection_"+collection_id).children('#'+ "collection_"+collection_id).children().attr("id");
+        collSrc = $('#modalCollectInner').children("#all_collections").children('#'+ "each_collection_"+collection_id).children('#'+ "collection_"+collection_id).children().attr("src");
+        if (collSrc.endsWith("{% static 'images/collected.png' %}")) {
+            console.log("un-collecting post_to_collection");   
+            $('#modalCollectInner').children("#all_collections").children('#'+ "each_collection_"+collection_id).children('#'+ "collection_"+collection_id).children().attr("src", "{% static 'images/collect.png' %}");    
+            var ajax = new XMLHttpRequest()
+            ajax.open("POST", "{% url 'remove_from_collection' %}")
+            ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+            ajax.onreadystatechange = function (response) {
+            console.log(response, this.status, this.readyState);
+            if (this.readyState == 4 && (this.status != 200 || response.target.response != 204)) {
+                collId = $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("id");
+                console.log("Inside post_to_collection error state - ")
+                collSrc = $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("src");
+                if (collSrc.endsWith("{% static 'images/collected.png' %}")) {
+                    console.log("collecting error part of post_to_collection");
+                    $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("src", "{% static 'images/collect.png' %}");
+                } else {
+                    console.log("un-collecting error part of post_to_collection");
+                    $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("src", "{% static 'images/collected.png' %}");
+                }
+            }
+        }
+        } else { 
+            console.log("collecting post_to_collection");     
+            $('#modalCollectInner').children("#all_collections").children('#'+ "each_collection_"+collection_id).children('#'+ "collection_"+collection_id).children().attr("src",  "{% static 'images/collected.png' %}");
+            var ajax = new XMLHttpRequest()
+            ajax.open("POST", "{% url 'add_to_collection' %}")
+            ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
+            ajax.onreadystatechange = function (response) {
+            console.log(response, this.status, this.readyState);
+            if (this.readyState == 4 && (this.status != 200 || response.target.response != 204)) {
+                collId = $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("id");
+                console.log("Inside post_to_collection error state")
+                collSrc = $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("src");
+                if (collSrc.endsWith("{% static 'images/collect.png' %}")) {
+                    console.log("collecting error part of post_to_collection");
+                    $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("src", "{% static 'images/collected.png' %}");
+                } else {
+                    console.log("un-collecting error part of post_to_collection");
+                    $('#modalCollectInner').children("#all_collections").children('#' + "each_collection_" + collection_id).children('#' + "collection_" + collection_id).children().attr("src", "{% static 'images/collect.png' %}");
+                }
+            }
+        }
+        }
+        
+        
+
+        var formData = new FormData()
+        for(var i in data)
+            formData.append(i, data[i]);
+
+        ajax.send(formData)
+    }
+
+    function click_private_collection(collection_id) {
+        pri_coll_id = 'private_collection_checkbox_'+collection_id;
+
+        if ( $('#' + 'private_collection_checkbox_'+collection_id).is(':checked') == false )  { 
+            collection_status = 0 ;
+        } else { 
+            collection_status = 1 ;
+        }
+        data = {
+            collection_id: collection_id, 
+            collection_status: collection_status
+        }
+        if ( $('#' + 'private_collection_checkbox_'+collection_id).is(':checked') == false ) {        
+            $('#' + 'private_collection_checkbox_' + collection_id).prop("checked", false);
+        } else {
+            $('#' + 'private_collection_checkbox_'+collection_id).prop( "checked", true );
+        }        
+        
         var ajax = new XMLHttpRequest()
-        ajax.open("POST", "{% url 'add_to_collection' %}")
+        ajax.open("POST", "{% url 'private_collections' %}")
         ajax.setRequestHeader("X-CSRFToken", "{{csrf_token}}");
         ajax.onreadystatechange = function(response)
         {
             console.log(response, this.status, this.readyState)
+            if (this.readyState == 4 && (this.status != 200)) { 
+                if ($('#' + 'private_collection_checkbox_' + collection_id).is(':checked') == false) {
+                    $('#' + 'private_collection_checkbox_' + collection_id).prop("checked", true);
+                } else {
+                    $('#' + 'private_collection_checkbox_' + collection_id).prop("checked", false);
+                }
+            }
         }
 
         var formData = new FormData()
@@ -184,6 +760,7 @@
 
         ajax.send(formData)
     }
+    
 
     function ajax_get(url, add_csrf, callback)
     {
@@ -205,26 +782,65 @@
 
 
     </script>
-</head>
+    </head>
 <body style="margin:0">
+
 <div class="header">
-    <table>
+    <div> 
+        <a href="{% url 'index' %}">
+            <img class="headerimg" src="{% static 'images/fleuron_header_reverse_transparent.png' %}" width=300px"
+                 style="margin-right:5px;margin-top:5px;background-color:#fcfcfc"/>
+    </a>     
+    {% if user.username %}
+    <div style="text-align:right; font-size:small">
+        <form method="POST" action="{% url 'search_results' %}">
+            {% csrf_token %}
+            <input class="search" type="text" name="search_ramble" placeholder="Search Ramble">
+        </form>
+    </div>
+    {% endif %}
+</div>
+   
+    <div style="float: right; font-size: small;">
+        {% if user.username %}
+            <p>
+        {% if user_profile.full_name %}
+                    Hello <a href="../u/{{ user.id }}"> {{ user_profile.full_name }}! </a>
+                {% else %}
+                    Hello <a href="../u/{{ user.id }}"> {{ user.username }}! </a> 
+                {% endif %}
+                &nbsp; &nbsp;
+                <img src="{{ user_profile.profile_pic.url }}" width="20px"/>
+                <a href="{% url 'logout' %}"><button style="font-size:small">Logout</button></a>
+             </p>
+        
+        </div>
+    {% else %}
+
+  
+       <a href="{% url 'signin' %}"><button id="signinbtn" >Sign In</button></a>
+       <a href="{% url 'signup' %}"><button id="signupbtn" >Get Started</button></a>
+    {% endif      %}
+    
+         
+    </div>
+    <!-- <table>
         <tr>
             <td>
                 <a href="{% url 'index' %}">
-                        <img src="{% static 'images/fleuron_header_reverse_transparent.png' %}" width=300px"
+                        <img class="headerimg" src="{% static 'images/fleuron_header_reverse_transparent.png' %}" width=300px"
                              style="margin-right:5px;margin-top:5px;background-color:#fcfcfc"/>
-                        <!--<img src="{% static 'images/logo_transparent.png' %}" width="44" height="44"
-                             style="margin-right:5px;margin-top:5px;"/>
-                        <div style="font-size:55;font-weight:bold;display:inline-block;"> Ramble </div> -->
                 </a>
-                <!--<p style="margin-left:60px"> Read, Write, Curate</p>-->
             </td>
             <td style="text-align:right">
                 {% if user.username %}
                     <div style="text-align:right; font-size:small">
                         <p>
-                            Hello <a href="../u/{{ user.id }}"> {{ user_profile.full_name }}! </a>
+			 {% if user_profile.full_name %}
+                                Hello <a href="../u/{{ user.id }}"> {{ user_profile.full_name }}! </a>
+                            {% else %}
+                                Hello <a href="../u/{{ user.id }}"> {{ user.username }}! </a> 
+                            {% endif %}
                             &nbsp; &nbsp;
                             <img src="{{ user_profile.profile_pic.url }}" width="20px"/>
                             <a href="{% url 'logout' %}"><button style="font-size:small">Logout</button></a>
@@ -240,23 +856,58 @@
                 {% endif %}
             </td>
         </tr>
-    </table>
+    </table> -->
 </div>
-<div style="margin:50px">
-{% block content %}
+{% if user.is_authenticated %}
+<div class="container, m-5" >
+    {% csrf_token %}
+    <div style="text-align:right;padding:0 10%">
+        <input type="text" id="new_ramble_title" name="new_ramble_title" maxlength="100" placeholder="Title"
+        style="width:100%; margin-bottom:10px; font-size:24px;
+        border-width: thin;box-shadow: inset 0 0 1px 1px #888;
+        padding: 5px 10px 5px 10px; "/>
+        <textarea id="new_ramble_post" name="new_ramble_post" maxlength="10000" placeholder="Tell your story..."
+              style="width:100%;height:40vh;margin-bottom:10px"
+        ></textarea>
+        <p style='text-align:left'> Add tags for your post below, separating each tag with a comma. </p>
+        <input type="text" id="new_ramble_tags", name="new_ramble_tags" maxlength="40" placeholder="Uncategorized"
+        style="width:100%">
+        <br>
+        <button id="draft">Save Draft </button>
+        <button onclick="submit_ramble()"> Ramble </button>
+    
+    </div>
+{% block postman_menu %}
 {% endblock %}
+{% block content %}
+
+{% endblock %}
+
+{% block javascript %}
+{% endblock %}
+
+
 </div>
-<div id=modalLikes onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
+{% endif %}
+
+<div class="container" id=modalLikes onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
 background:rgba(100,100,100,0.5);">
     <div id=modalLikesInner style="position:fixed;top:30vh;height:40vh;left:30vw;width:40vw;
 background:white;box-shadow:1px 1px 10px #888; border-radius:8px;overflow-y:scroll">
     </div>
 </div>
-<div id=modalCollect onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
+<div class="container" id=modalCollect onclick="if (event.target==this) {this.style.display='none'}" style="display:none;position:fixed;top:0;height:100vh;left:0;width:100vw;
 background:rgba(100,100,100,0.5);">
     <div id=modalCollectInner style="position:fixed;top:30vh;height:40vh;left:30vw;width:40vw;
 background:white;box-shadow:1px 1px 10px #888; border-radius:8px;overflow-y:scroll">
     </div>
 </div>
-</body>
+</div>
+<div class="footer">
+    <div style="float: right ;padding-right: 20px; margin-top: 20px; position: relative;
+ ; bottom: 0px; right: 0px">
+        <a href="{% url 'contact_us' %}" style="color: black;"><i class="fa fa-envelope" style="color: black;"></i> Contact</a> 
+    </div>   
+</div>
+
 </html>

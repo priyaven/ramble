@@ -5,8 +5,33 @@
 {% if profile_user %}
     <div align="center">
         <img src="{{ profile_user_profile.profile_pic.url }}" width="200px"/>
+        <a class="btn btn-primary" href="{% url 'edit_your_profile'%}">Edit your Profile</a>
+
+
         <p>{{ profile_user_profile.full_name }} (@{{ profile_user.username}})</p>
         <p> {{ profile_user_profile.bio }}</p>
+    </div>
+    <div align="center">
+        <a href="/u/{{ user.id}}/likes"><button id="likes_user_profile" >Likes</button></a>
+        <a href="/u/{{ user.id}}/follows"><button id="follows_user_profile" >Follows</button></a>
+        <a href="/u/{{ user.id}}/followers"><button id="followers_user_profile" >Followers</button></a>
+        <a href="/u/{{ user.id}}/collections"><button id="collections_user_profile" >Collections</button></a>
+    </div>
+    <div align="center">
+    <button id="button_block_user_id" onclick="block_user({{ profile_user.pk }}, button_block_user_id)" class="iconbutton" style="margin-left:5px;padding:2px">
+        {% if blocked %}
+            <img id="block_{{profile_user.pk}}" src="{% static 'images/blocked_button.png' %}" width="12px" height="12px">
+        {% else %}
+            <img id="block_{{profile_user.pk}}" src="{% static 'images/block_button.png' %}" width="12px" height="12px">
+        {% endif %}
+    </button>
+    <button id="button_mute_user_id" onclick="mute_user({{ profile_user.pk }}, button_mute_user_id)" class="iconbutton" style="margin-left:5px;padding:2px">
+        {% if muted %}
+            <img id="mute_{{profile_user.pk}}" src="{% static 'images/muted_user.png' %}" width="12px" height="12px">
+        {% else %}
+            <img id="mute_{{profile_user.pk}}" src="{% static 'images/mute_user.png' %}" width="12px" height="12px">
+        {% endif %}
+    </button>
     </div>
 {% else %}
     <p> 404 User Not Found</p>
